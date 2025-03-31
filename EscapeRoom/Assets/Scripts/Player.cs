@@ -2,6 +2,7 @@ using UnityEngine;
 
 public class Player : MonoBehaviour
 {
+    private GameObject pickedUpObject = null;
     public float moveSpeed = 5f;
     public float mouseSensitivity = 2f;
     public float gravity = -9.81f;
@@ -56,4 +57,40 @@ public class Player : MonoBehaviour
 
         controller.Move(move * moveSpeed * Time.deltaTime);
     }
+
+
+
+void OnControllerColliderHit(ControllerColliderHit hit)
+{
+    // Check if player is colliding with a tagged object
+    if (hit.gameObject.CompareTag("Punctuation"))
+    {
+        // If Shift is held and no object is picked up yet
+        if (Input.GetKey(KeyCode.LeftShift) && pickedUpObject == null)
+        {
+            pickedUpObject = hit.gameObject;
+            pickedUpObject.transform.SetParent(transform); // Make it a child of the player
+            pickedUpObject.transform.localPosition = new Vector3(0, 1, 1); // Adjust position in front of player
+            Rigidbody rb = pickedUpObject.GetComponent<Rigidbody>();
+            if (rb) rb.isKinematic = true; // Optional: disable physics while held
+        }
+    }
+}
+
+// Called every frame to check for drop
+void LateUpdate()
+{
+    if (pickedUpObject != null && !Input.GetKey(KeyCode.LeftShift))
+    {
+        // Drop the object
+        pickedUpObject.transform.SetParent(null);
+         Vector3 dropPosition = pickedUpObject.transform.position;
+        dropPosition.y = 3.417f;
+        pickedUpObject.transform.position = dropPosition;
+
+        Rigidbody rb = pickedUpObject.GetComponent<Rigidbody>();
+        if (rb) rb.isKinematic = false; // Re-enable physics
+        pickedUpObject = null;
+    }
+}
 }
