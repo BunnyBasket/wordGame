@@ -1,96 +1,123 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
-public class Player : MonoBehaviour
+public class GameManager : MonoBehaviour
 {
-    private GameObject pickedUpObject = null;
-    public float moveSpeed = 5f;
-    public float mouseSensitivity = 2f;
-    public float gravity = -9.81f;
-    public float jumpHeight = 1.5f;
+    public static GameManager GM;
+    public bool gameIsOver = false;
+    public bool gameWin = false;
+    public LivesManage livesManager;
 
-    public Transform cameraTransform;
+    public customer[] customers;
 
-    private CharacterController controller;
-    private float verticalVelocity;
-    private float xRotation = 0f;
+    [Header("Music Settings")]
+    public AudioSource musicSource;
+    public AudioClip mainMusic;
+
+    // Game win setup
+    public GameObject playerToDestroy;
+    public GameObject winToSpawn;
+    private Transform spawnLocation;
+
+    // Testing
+    [ContextMenu("Test Game Win")]
+    void TestGameWin()
+    {
+        GameWin();
+    }
+
+    [ContextMenu("Test Game Over")]
+    void TestGameOver()
+    {
+        HandleGameOver();
+    }
 
     void Start()
     {
-        controller = GetComponent<CharacterController>();
-        Cursor.lockState = CursorLockMode.Locked;
+        Application.targetFrameRate = 60;
+
+        if (GM == null)
+        {
+            GM = this;
+        }
+
+        PlayBackgroundMusic();
     }
 
     void Update()
     {
-        HandleMouseLook();
-        HandleMovement();
-    }
-
-    void HandleMouseLook()
-    {
-        float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-        float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
-
-        xRotation -= mouseY;
-        xRotation = Mathf.Clamp(xRotation, -90f, 90f);
-
-        cameraTransform.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
-        transform.Rotate(Vector3.up * mouseX);
-    }
-
-    void HandleMovement()
-    {
-        float moveX = Input.GetAxis("Horizontal");
-        float moveZ = Input.GetAxis("Vertical");
-
-        Vector3 move = transform.right * moveX + transform.forward * moveZ;
-
-        // Gravity
-        if (controller.isGrounded && verticalVelocity < 0)
-            verticalVelocity = -2f;
-
-        if (Input.GetButtonDown("Jump") && controller.isGrounded)
-            verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
-
-        verticalVelocity += gravity * Time.deltaTime;
-        move.y = verticalVelocity;
-
-        controller.Move(move * moveSpeed * Time.deltaTime);
-    }
-
-
-
-void OnControllerColliderHit(ControllerColliderHit hit)
-{
-    // Check if player is colliding with a tagged object
-    if (hit.gameObject.CompareTag("Punctuation"))
-    {
-        // If Shift is held and no object is picked up yet
-        if (Input.GetKey(KeyCode.LeftShift) && pickedUpObject == null)
+        if (!gameIsOver && AllCustomersDone())
         {
-            pickedUpObject = hit.gameObject;
-            pickedUpObject.transform.SetParent(transform); // Make it a child of the player
-            pickedUpObject.transform.localPosition = new Vector3(0, 1, 1); // Adjust position in front of player
-            Rigidbody rb = pickedUpObject.GetComponent<Rigidbody>();
-            if (rb) rb.isKinematic = true; // Optional: disable physics while held
+            GameWin();
         }
     }
-}
 
-// Called every frame to check for drop
-void LateUpdate()
-{
-    if (pickedUpObject != null && !Input.GetKey(KeyCode.LeftShift))
+    void PlayBackgroundMusic()
     {
-        // Drop the object
-        pickedUpObject.transform.SetParent(null);
-         Vector3 dropPosition = pickedUpObject.transform.position;
-        dropPosition.y = 3.417f;
-        pickedUpObject.transform.position = dropPosition;
-
-        Rigidbody rb = pickedUpObject.GetComponent<Rigidbody>();
-        if (rb) rb.isKinematic = false; // Re-enable physics
-        pickedUpObject = null;
+        if (musicSource != null && mainMusic != null)
+        {
+            musicSource.clip = mainMusic;
+            musicSource.loop = true;
+            musicSource.Play();
+        }
     }
-}
+
+    bool AllCustomersDone()
+    {
+        foreach (customer c in customers)
+        {
+            if (c == null || !c.isDone)
+                return false;
+        }
+        return true;
+    }
+
+    public void GameWin()
+    {
+        Debug.Log("Game Win");
+        gameIsOver = true;
+
+        spawnLocation = PlayerController.Instance.GetCurrentRowTransform();
+
+        if (playerToDestroy != null)
+            Destroy(playerToDestroy);
+
+        if (winToSpawn != null)
+        {
+            Instantiate(winToSpawn, spawnLocation.position, spawnLocation.rotation);
+        }
+    }
+
+    public void HandleGameOver()
+    {
+        if (livesManager == null)
+        {
+            Debug.LogWarning("LivesManager is not assigned.");
+            return;
+        }
+
+        if (livesManager.HasLivesLeft())
+        {
+            Debug.Log("Player lost a life. Pausing for animation...");
+            Time.timeScale = 0f; // Pause game
+            StartCoroutine(HandleLifeLoss());
+        }
+        else
+        {
+            Debug.Log("No lives left. Game Over.");
+            gameIsOver = true;
+            // Add game over UI, scene reload, etc. here
+        }
+    }
+
+    private IEnumerator HandleLifeLoss()
+    {
+        yield return new WaitForSecondsRealtime(1.5f); // Replace with animation length if needed
+
+        livesManager.LoseLife(); // Reduce life by 1
+
+        Time.timeScale = 1f; // Resume game
+        Debug.Log("Game resumed after losing a life.");
+    }
 }
